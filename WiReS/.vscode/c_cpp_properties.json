@@ -1,0 +1,37 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "msvc-x64",
+            "includePath": [
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\c++\\7",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\c++\\7\\backward",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\lib\\gcc\\x86_64-linux-gnu\\7\\include",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\lib\\gcc\\x86_64-linux-gnu\\7\\include-fixed",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\x86_64-linux-gnu",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\x86_64-linux-gnu\\gnu",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\x86_64-linux-gnu\\include",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\usr\\include\\x86_64-linux-gnu\\c++\\7",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\home\\agodemar\\OpenFOAM\\OpenFOAM-5.x\\src",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\home\\agodemar\\OpenFOAM\\OpenFOAM-5.x\\src\\finiteVolume\\cfdTools\\general\\include",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\home\\agodemar\\OpenFOAM\\OpenFOAM-5.x\\src\\finiteVolume\\lnInclude",
+                "C:\\Users\\agodemar\\AppData\\Local\\Packages\\CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc\\LocalState\\rootfs\\home\\agodemar\\OpenFOAM\\OpenFOAM-5.x\\src\\OpenFOAM\\lnInclude"
+            ]
+        }
+    ],
+    "version": 4
+}
