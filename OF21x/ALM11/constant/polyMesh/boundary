@@ -1,7 +1,7 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  2.1.1                                 |
+|  \\    /   O peration     | Version:  5.x                                   |
 |   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
@@ -20,41 +20,45 @@ FoamFile
     bottom
     {
         type            patch;
-        nFaces          36864;
-        startFace       68053704;
+        nFaces          9216;
+        startFace       649728;
     }
     top
     {
         type            patch;
-        nFaces          36864;
-        startFace       68090568;
+        nFaces          9216;
+        startFace       658944;
     }
     west
     {
         type            patch;
-        nFaces          24888;
-        startFace       68127432;
+        nFaces          2304;
+        startFace       668160;
     }
     east
     {
         type            patch;
-        nFaces          24888;
-        startFace       68152320;
+        nFaces          2304;
+        startFace       670464;
     }
     north
     {
         type            cyclic;
-        nFaces          9216;
-        startFace       68177208;
+        inGroups        1(cyclic);
+        nFaces          2304;
+        startFace       672768;
         matchTolerance  0.0001;
+        transform       unknown;
         neighbourPatch  south;
     }
     south
     {
         type            cyclic;
-        nFaces          9216;
-        startFace       68186424;
+        inGroups        1(cyclic);
+        nFaces          2304;
+        startFace       675072;
         matchTolerance  0.0001;
+        transform       unknown;
         neighbourPatch  north;
     }
 )

@@ -1,8 +1,8 @@
 /*
 * BoostServer.cpp
 *
-*  Created on: 1 Dec 2016
-*      Author: Carmine Varriale
+*  Created on: 8 Jun 2018
+*      Author: Agostino De Marco
 */
 
 #include <iostream>
@@ -49,7 +49,7 @@ void removeSpaceAndNewline(char* s) {
 void tokenize_buffer(char* buffer, char symbol, long double* array) {
 
 	// Print array for debug
-	//std::cout << "\n\nReceived buffer: " << buffer;
+	std::cout << "\n\nReceived buffer: " << buffer;
 
 	removeSpaceAndNewline(buffer);
 

@@ -17,7 +17,7 @@ FoamFile
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-numberOfSubdomains  240;
+numberOfSubdomains  6;
 method          scotch;
 scotchCoeffs
 {

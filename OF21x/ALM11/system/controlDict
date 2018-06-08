@@ -35,7 +35,7 @@ FoamFile
 
   writeControl      adjustableRunTime;
 
-  writeInterval     100;
+  writeInterval     100;        //how many time steps to keep
 
   purgeWrite        0;
 
