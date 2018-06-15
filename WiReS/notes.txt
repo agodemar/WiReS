@@ -1,0 +1,7 @@
+1. Run server:
+
+> /mnt/c/Users/DeMarco-PC/JSBSim-agodemar/WiReS/OF5x/Test00$ $FOAM_USER_APPBIN/MiniWRServer 1138
+
+2. Run JSBSim with output type="SOCKET" action="WAIT_SOCKET_REPLY"
+
+> /mnt/c/Users/DeMarco-PC/JSBSim-agodemar/jsbsim/build$ ./src/JSBSim --root=/mnt/c/Users/DeMarco-PC/JSBSim-agodemar/jsbsim-sandbox --script=scripts/C1723.xml --logdirectivefile=socket_oi.xml
