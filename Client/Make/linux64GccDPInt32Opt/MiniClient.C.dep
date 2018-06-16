@@ -1,0 +1,4 @@
+$(OBJECTS_DIR)/MiniClient.C.dep: \
+MiniClient.C \
+
+

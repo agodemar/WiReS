@@ -1,12 +1,17 @@
 #include <boost/asio.hpp>
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
 
+#include <iostream>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <atomic>
 #include <memory>
-#include <iostream>
+
 
 using namespace boost;
-
+namespace po = boost::program_options;
 
 //===============================================
 // GLOBALS
@@ -225,16 +230,45 @@ const unsigned int DEFAULT_THREAD_POOL_SIZE = 2;
 
 int main(int argc, char* argv[])
 {
+	//=============================================
+	// command line options
+
+	std::string app_name = boost::filesystem::basename(argv[0]);
+	std::string raw_ip_address;
+	unsigned short port_num;
+
+	std::stringstream ss_help_header;
+	ss_help_header << "Command line options. \n" <<
+		"Calling the applications is done with the command:\n" <<
+	    "\t> $FOAM_USER_APPBIN/" << app_name << " [options]\n" <<
+		"Options";
+
+	program_options::options_description desc(ss_help_header.str());
+    desc.add_options()
+      ("help,h", "This help text.")
+      ("port,p", po::value<unsigned short>(&port_num)->default_value(1025), "Port number");
+
+	po::variables_map vm;
+	try {
+		po::store(parse_command_line(argc, argv, desc), vm);
+		po::notify(vm);
+
+		if (vm.count("help")) {
+			std::cout << desc << '\n';
+			return 0;
+		}
+		if (vm.count("port"))
+			std::cout << "Port number set to: " << vm["port"].as<unsigned short>() << '\n';
+	}
+	catch(boost::program_options::error& e)
+	{ 
+		std::cerr << "COMMAND LINE ERROR: " << e.what() << std::endl << std::endl; 
+	} 
+
+	//=============================================
+	// server logic
 
 	try {
-
-		if (argc != 2)
-		{
-			std::cerr << "Usage: $FOAM_USER_APPBIN/MiniWRServer <port>\n";
-			return 1;
-		}
-
-		port_num = argv[1];
 
 		Server srv;
 
@@ -244,7 +278,10 @@ int main(int argc, char* argv[])
 		if (thread_pool_size == 0)
 			thread_pool_size = DEFAULT_THREAD_POOL_SIZE;
 
-		srv.Start(std::atoi(port_num), thread_pool_size);
+		std::cout << "TCP asynchronous server listening on port "
+			<< port_num << std::endl;
+
+		srv.Start(port_num, thread_pool_size);
 
 		std::this_thread::sleep_for(std::chrono::seconds(60));
 
@@ -253,7 +290,7 @@ int main(int argc, char* argv[])
 	catch (system::system_error &e) {
 		std::cout << "Error occured! Error code = "
 			<< e.code() << ". Message: "
-			<< e.what();
+			<< e.what() << std::endl;
 	}
 
 	return 0;

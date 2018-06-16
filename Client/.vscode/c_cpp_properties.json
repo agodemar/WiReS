@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "name": "WSL",
+            "intelliSenseMode": "clang-x64",
+            "compilerPath": "/usr/bin/gcc",
+            "includePath": [
+                "${workspaceFolder}",
+                "/mnt/c/Users/agodemar/AppData/Local/Packages/CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc/LocalState/rootfs/home/agodemar/OpenFOAM/OpenFOAM-5.x/src",
+                "/mnt/c/Users/agodemar/AppData/Local/Packages/CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc/LocalState/rootfs/home/agodemar/OpenFOAM/OpenFOAM-5.x/src/finiteVolume/cfdTools/general\\include",
+                "/mnt/c/Users/agodemar/AppData/Local/Packages/CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc/LocalState/rootfs/home/agodemar/OpenFOAM/OpenFOAM-5.x/src/finiteVolume/lnInclude",
+                "/mnt/c/Users/agodemar/AppData/Local/Packages/CanonicalGroupLimited.Ubuntu18.04onWindows_79rhkp1fndgsc/LocalState/rootfs/home/agodemar/OpenFOAM/OpenFOAM-5.x/src/OpenFOAM/lnInclude"
+            ],
+            "defines": [],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/mnt/c/libraries"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
