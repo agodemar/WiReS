@@ -7,14 +7,6 @@
 
 using namespace boost;
 
-
-//===============================================
-// GLOBALS
-
-const char*  port_num = "1025";
-
-//===============================================
-
 class Service {
 public:
 	Service(std::shared_ptr<asio::ip::tcp::socket> sock) :
@@ -83,20 +75,15 @@ private:
 		// In this method we parse the request, process it
 		// and prepare the request.
 
-		std::string s( (std::istreambuf_iterator<char>(&request)), std::istreambuf_iterator<char>() );
-		std::cout << "[ProcessRequest] request: " << s << std::endl;
-/*
 		// Emulate CPU-consuming operations.
 		int i = 0;
 		while (i != 1000000)
 			i++;
-*/
-/*
+
 		// Emulate operations that block the thread
 		// (e.g. synch I/O operations).
 		std::this_thread::sleep_for(
 			std::chrono::milliseconds(100));
-*/
 
 		// Prepare and return the response message. 
 		std::string response = "Response\n";
@@ -223,19 +210,11 @@ private:
 
 const unsigned int DEFAULT_THREAD_POOL_SIZE = 2;
 
-int main(int argc, char* argv[])
+int main()
 {
+	unsigned short port_num = 3333;
 
 	try {
-
-		if (argc != 2)
-		{
-			std::cerr << "Usage: $FOAM_USER_APPBIN/MiniWRServer <port>\n";
-			return 1;
-		}
-
-		port_num = argv[1];
-
 		Server srv;
 
 		unsigned int thread_pool_size =
@@ -244,7 +223,7 @@ int main(int argc, char* argv[])
 		if (thread_pool_size == 0)
 			thread_pool_size = DEFAULT_THREAD_POOL_SIZE;
 
-		srv.Start(std::atoi(port_num), thread_pool_size);
+		srv.Start(port_num, thread_pool_size);
 
 		std::this_thread::sleep_for(std::chrono::seconds(60));
 
