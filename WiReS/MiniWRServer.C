@@ -80,7 +80,8 @@ private:
 
 	// Here we perform the cleanup.
 	void onFinish() {
-		delete this;
+		//std::cout << "Service deleted." << std::endl;
+		//delete this;
 	}
 
 	std::string ProcessRequest(asio::streambuf& request) {
@@ -153,7 +154,10 @@ private:
 		std::shared_ptr<asio::ip::tcp::socket> sock)
 	{
 		if (ec == 0) {
-			(new Service(sock))->StartHandling();
+			// (new Service(sock))->StartHandling();
+			srvc.reset(new Service(sock));
+			srvc->StartHandling();
+
 		}
 		else {
 			std::cout << "Error occured! Error code = "
@@ -174,6 +178,7 @@ private:
 	}
 
 private:
+	std::unique_ptr<Service> srvc;
 	asio::io_service& m_ios;
 	asio::ip::tcp::acceptor m_acceptor;
 	std::atomic<bool> m_isStopped;
@@ -236,6 +241,7 @@ int main(int argc, char* argv[])
 	std::string app_name = boost::filesystem::basename(argv[0]);
 	std::string raw_ip_address;
 	unsigned short port_num;
+	int sleep_seconds;
 
 	std::stringstream ss_help_header;
 	ss_help_header << "Command line options. \n" <<
@@ -246,6 +252,7 @@ int main(int argc, char* argv[])
 	program_options::options_description desc(ss_help_header.str());
     desc.add_options()
       ("help,h", "This help text.")
+      ("up-time-secs,u", po::value<int>(&sleep_seconds)->default_value(120), "Server up time")
       ("port,p", po::value<unsigned short>(&port_num)->default_value(1025), "Port number");
 
 	po::variables_map vm;
@@ -280,10 +287,12 @@ int main(int argc, char* argv[])
 
 		std::cout << "TCP asynchronous server listening on port "
 			<< port_num << std::endl;
+		std::cout << "Server up time: "
+			<< sleep_seconds << std::endl;
 
 		srv.Start(port_num, thread_pool_size);
 
-		std::this_thread::sleep_for(std::chrono::seconds(60));
+		std::this_thread::sleep_for(std::chrono::seconds(sleep_seconds));
 
 		srv.Stop();
 	}
