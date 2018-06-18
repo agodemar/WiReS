@@ -33,6 +33,20 @@ using namespace GeographicLib;
 //===============================================
 // Server logic
 
+std::string readLineFromSocket(asio::ip::tcp::socket& sock) {
+	asio::streambuf buf;
+	// Synchronously read data from the socket until
+	// '\n' symbol is encountered.
+	asio::read_until(sock, buf, '\n');
+	std::string message;
+	// Because buffer 'buf' may contain some other data
+	// after '\n' symbol, we have to parse the buffer and
+	// extract only symbols before the delimiter.
+	std::istream input_stream(&buf);
+	std::getline(input_stream, message);
+	return message;
+}
+
 class Session
 {
 	public:
@@ -43,18 +57,16 @@ class Session
 			: socket_(io_service), mesh_ptr_(mesh_ptr),	U_ptr_(U_ptr)
 		{
 		}
-
+		//-----------------------------------------------------------------------------------------------
 		asio::ip::tcp::socket& socket() {
 			return socket_;
 		}
-
+		//-----------------------------------------------------------------------------------------------
 		// Read headers from client and then handle_read
-		void start()
-		{
+		void start() {
 			// init interpolator (must be one per session):
 			interpU_ = interpolation< vector >::New("cellPoint",*U_ptr_);
 
-/*
 			socket_.async_read_some(
 				asio::buffer(mblebuff_),
 				boost::bind(
@@ -79,88 +91,61 @@ class Session
 
 			std::cout << "\n\n[START] byte_transferred: " << boost::asio::placeholders::bytes_transferred << std::endl;
 			std::cout << "\n\n[START] message: " << message << std::endl;
-*/
-
-			asio::async_read_until(socket_,
-				sbuff_,
-				'\n',
-				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
-				{
-					onRequestReceived(ec, bytes_transferred);
-				});
 
 		}
 
 	private:
 		//-----------------------------------------------------------------------------------------------
-		void onRequestReceived(const boost::system::error_code& ec, std::size_t bytes_transferred) {
-			if (ec != 0) {
-				std::cout << "[Session::start] Error occured! Error code = "
-					<< ec.value()
-					<< ". Message: " << ec.message();
+		// Process input, interpolate, process result, write to client and then handle_write
+		void handle_read(const boost::system::error_code& error, size_t bytes_transferred)
+		{
 
-				//onFinish();
-				return;
+			if (!error) {
+				std::istream input(&sbuff_);
+				std::string message;
+				// read a line from the streambuf object
+				// std::getline(input, message); 
+				input >> message;
+				// Clear EOF bit.
+				input.clear();
+				std::cout << "\n\nhandle_read: " << message << std::endl;
+
+				// TODO: parse data here
+
+				// Write
+				boost::asio::async_write(socket_,
+					boost::asio::buffer("pippo", bytes_transferred),
+					boost::bind(&Session::handle_write, this, boost::asio::placeholders::error)
+				);
+			}
+			else {
+				delete this;
 			}
 
-			std::cout << "[onRequestReceived] bytes_transferred (inbound): " << bytes_transferred << std::endl;
-
-			// Process the request.
-			response_ = processRequest(sbuff_, bytes_transferred);
-
-			std::cout << "[onRequestReceived] response: " << response_ << std::endl;
-
-			// Initiate asynchronous write operation.
-			asio::async_write(socket_,
-				asio::buffer(response_),
-				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
-				{
-					onResponseSent(ec, bytes_transferred);
-				});
 		}
-
-		std::string processRequest(asio::streambuf& b, std::size_t bytes_transferred) {
-			// In this method we parse the request, process it
-			// and prepare the request.
-
-			//std::string s( (std::istreambuf_iterator<char>(&b)), std::istreambuf_iterator<char>() );
-			std::istream is(&b);
-    		std::string s;
-    		std::getline(is, s);
-			std::cout << "[processRequest] request: " << s << std::endl;
-
-			// Prepare and return the response message. 
-			std::string response = "Response...\n";
-			return response;
-		}
-
-		void onResponseSent(const boost::system::error_code& ec, std::size_t bytes_transferred) {
-			if (ec != 0) {
-				std::cout << "[onResponseSent] Error occured! Error code = "
-					<< ec.value()
-					<< ". Message: " << ec.message() << std::endl;
+		//-----------------------------------------------------------------------------------------------
+		// Start reading again and then handle_read --> loop until End Of Data
+		void handle_write(const boost::system::error_code& error)
+		{
+			if (!error) {
+				std::cout << "\n\nhandle_write ... " << std::endl;
+				socket_.async_read_some(
+					asio::buffer(mblebuff_),
+					boost::bind(&Session::handle_read,
+					this,
+					boost::asio::placeholders::error,
+					boost::asio::placeholders::bytes_transferred)
+				);
 			}
-
-			std::cout << "[onResponseSent] ..." << std::endl;
-			std::cout << "[onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
-
-			//onFinish();
-
-			asio::async_read_until(socket_,
-				sbuff_,
-				'\n',
-				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
-				{
-					onRequestReceived(ec, bytes_transferred);
-				});
-
+			else {
+				delete this;
+			}
 		}
 
 		//-----------------------------------------------------------------------------------------------
 		asio::ip::tcp::socket socket_;
 		asio::streambuf sbuff_;
-		std::string response_;
-		//asio::streambuf::mutable_buffers_type mblebuff_ = sbuff_.prepare(4096);
+		asio::streambuf::mutable_buffers_type mblebuff_ = sbuff_.prepare(512);
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
 		autoPtr< interpolation< vector > > interpU_;

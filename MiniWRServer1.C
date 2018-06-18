@@ -257,8 +257,8 @@ int main(int argc, char* argv[])
 	{
 		if (argc != 2)
 		{
-		std::cerr << "Usage: server <port>\n";
-		return 1;
+			std::cerr << "Usage: server <port>\n";
+			return 1;
 		}
 
 		the_port = argv[1];
