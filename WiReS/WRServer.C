@@ -1,15 +1,14 @@
-/*
-* BoostServer.cpp
-*
-*  Created on: 1 Dec 2016
-*      Author: Carmine Varriale
-*/
-
 #include <iostream>
-#include <iomanip>
-#include <cstdlib>
+#include <sstream>
+#include <string>
+
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/program_options.hpp>
+#include <boost/filesystem.hpp>
+
+using namespace boost;
+namespace po = boost::program_options;
 
 // Includes for OpenFOAM
 #include "argList.H"
@@ -23,357 +22,293 @@
 
 using namespace Foam;
 using namespace GeographicLib;
-using boost::asio::ip::tcp;
 
-
-//========================
+//===============================================
 // GLOBALS
-//========================
-
-const char*  my_port = "1025";
-
-//========================
-// FUNCTIONS
-//========================
-
-void removeSpaceAndNewline(char* s) {
-	char* s2 = s;
-	do {
-		if (*s2 != ' ' && *s2 != '\n')
-		*s++ = *s2;
-	} while (*s2++);
-}
-
-//-----------------------------------------------------------------------------------------------
-
-void tokenize_buffer(char* buffer, char symbol, long double* array) {
-
-	// Print array for debug
-	//std::cout << "\n\nReceived buffer: " << buffer;
-
-	removeSpaceAndNewline(buffer);
-
-	std::string bufstr(buffer),
-							substr;
-
-	// Print for debug
-	Info << "\n\nRECV: " << bufstr << '\n';
-
-	for (int i=0; i<3; i++) {
-
-		unsigned int pos = bufstr.find(symbol, 0);
-		// if (pos == string::npos) {
-		// 	std::cerr << "ERROR on read(): could not tokenize buffer correctly\n";
-		// 	perror("");
-		// 	exit(1);
-		// }
-
-		substr = bufstr.substr(0, pos);
-		array[i] = atof(substr.c_str());
-		bufstr = bufstr.substr(pos+1, string::npos);	// update bufstr with remaining part of buffer
-	}
-
-	/* Print for debug
-	for (int i=0; i<=2; i++) {
-		std::cout << "array[" << i << "]=" << std::fixed << std::setprecision(6) << array[i] << ", ";
-	}
-	std::cout << '\n';
-	*/
-}
 
 
-std::string to_string(double dbl) {
-	std::ostringstream strs;
-	strs << std::fixed << std::setprecision(6) << dbl;
-	std::string str = strs.str();
-	return str;
-}
+//===============================================
+// Server logic
 
-//-----------------------------------------------------------------------------------------------
-
-inline double mtoft (double dbl) {
-	return 3.28084*dbl;
-}
-
-//-----------------------------------------------------------------------------------------------
-
-//========================
-// CLASS: SESSION
-//========================
-
-class session {
-
+class Session
+{
 	public:
-
-		//-----------------------------------------------------------------------------------------------
-		session(boost::asio::io_service& io_service,
-						const Foam::fvMesh *mesh_ptr,
-					  const volVectorField *U_ptr)
-		: socket_(io_service),
-			mesh_ptr_(mesh_ptr),
-			U_ptr_(U_ptr)
+		Session(
+			boost::asio::io_service& io_service,
+			const Foam::fvMesh *mesh_ptr,
+			const volVectorField *U_ptr)
+			: socket_(io_service), mesh_ptr_(mesh_ptr),	U_ptr_(U_ptr)
 		{
 		}
-		//-----------------------------------------------------------------------------------------------
-		tcp::socket& socket() {
+
+		asio::ip::tcp::socket& socket() {
 			return socket_;
 		}
-		//-----------------------------------------------------------------------------------------------
-		// Read headers from client and then handle_read
-		void start() {
 
+		// Read headers from client and then handle_read
+		void start()
+		{
 			// init interpolator (must be one per session):
 			interpU_ = interpolation< vector >::New("cellPoint",*U_ptr_);
 
-			socket_.async_read_some(boost::asio::buffer(data_, max_length),
-															boost::bind(&session::handle_read,
-																					this,
-																					boost::asio::placeholders::error,
-																					boost::asio::placeholders::bytes_transferred)
-			);
+/*
+			socket_.async_read_some(
+				asio::buffer(mblebuff_),
+				boost::bind(
+					&Session::handle_read,
+					this,
+					boost::asio::placeholders::error,
+					boost::asio::placeholders::bytes_transferred)
+				);
 
-			Info << "\n\nSTART: " << data_ << endl;
+			sbuff_.commit(boost::asio::placeholders::bytes_transferred);
+
+			// Read from the input sequence and consume the read data.
+			// The input sequence is empty
+			std::istream input(&sbuff_);
+			std::string message;
+			// read a line from the streambuf object
+			// std::getline(input, message); 
+			// input >> message;
+
+			// Clear EOF bit.
+    		input.clear();
+
+			std::cout << "\n\n[START] byte_transferred: " << boost::asio::placeholders::bytes_transferred << std::endl;
+			std::cout << "\n\n[START] message: " << message << std::endl;
+*/
+
+			asio::async_read_until(socket_,
+				sbuff_,
+				'\n',
+				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
+				{
+					onRequestReceived(ec, bytes_transferred);
+				});
+
 		}
-		//-----------------------------------------------------------------------------------------------
 
 	private:
 		//-----------------------------------------------------------------------------------------------
-		// Process input, interpolate, process result, write to client and then handle_write
-		void handle_read(const  boost::system::error_code& error,
-										 size_t bytes_transferred) {
+		void onRequestReceived(const boost::system::error_code& ec, std::size_t bytes_transferred) {
+			if (ec != 0) {
+				std::cout << "[Session::start] Error occured! Error code = "
+					<< ec.value()
+					<< ". Message: " << ec.message();
 
-				if (!error) {
-
-					long double position[3] = {0};
-					std::string wind_compon	= "";
-
-					// Stage 1: Process buffer (tokenize)
-					tokenize_buffer(data_, ',', position);
-
-					// Stage 2: Prepare for interpolation
-					// Server is completely asynchronous and deals with each client separately
-					// Therefore, only one point per session per reading is needed
-					pointField pts(1);
-
-					double 	lat = position[0],		// expected to be in degrees
-									lon = position[1],		// expected to be in degrees
-									alt = position[2];		// expected to be in meters
-					int zone;
-					bool northp;
-					double x, y, gamma, k;
-
-					// Convert from Lat-Lon to UTM easting (x)  and northing (y)
-					GeographicLib::UTMUPS::Forward(lat, lon, zone, northp, x, y, gamma, k);
-					pts[0] = point(x, y, alt);
-
-					Info << "Lat=" << lat << " and Lon=" << lon
-					<< " converted to " << "x=" << x << " and " << "y=" << y << " UTM" << endl;
-
-					// Stage 3: Interpolate
-					Info << "Interpolating U" << endl;
-					labelList pcells(pts.size());
-					vectorField resultU(pts.size());
-					forAll(pts,i){
-
-						pcells[i]  = mesh_ptr_->findCell(pts[i]);
-
-						if (pcells[i] == -1) {
-							// point is not in the grid
-							Info << i << ": p = " << pts[i]
-							<< " is out of grid" << endl;
-							wind_compon = "0.0,0.0,0.0";
-						}
-						else {
-							resultU[i] = interpU_->interpolate(pts[i],pcells[i]);
-
-							Info << i << ": p = " << pts[i]
-									 << ", U = " << resultU[i] << endl;
-
-							// Stage 4: Process data
-							wind_compon += to_string(mtoft(resultU[i][1])) + "," +  // North component is the second
-													   to_string(mtoft(resultU[i][0])) + "," +  // East component is the first
-													   to_string(mtoft(-1*resultU[i][2]));  		// Down component is the opposite of third
-						}
-
-						// Print for debug
-						// Info << "wind_compon string: " << wind_compon << endl;
-					}
-				Info << "End of interpolation" << endl;
-
-				// Write
-					// Print for debug
-					Info << "SEND: " << wind_compon.c_str();
-
-					boost::asio::async_write(socket_,
-																	 boost::asio::buffer(wind_compon.c_str(), bytes_transferred),
-																	 boost::bind(&session::handle_write,
-																		 					 this,
-																							 boost::asio::placeholders::error)
-					);
+				//onFinish();
+				return;
 			}
-			else {
-				delete this;
-			}
+
+			std::cout << "[onRequestReceived] bytes_transferred (inbound): " << bytes_transferred << std::endl;
+
+			// Process the request.
+			response_ = processRequest(sbuff_, bytes_transferred);
+
+			std::cout << "[onRequestReceived] response: " << response_ << std::endl;
+
+			// Initiate asynchronous write operation.
+			asio::async_write(socket_,
+				asio::buffer(response_),
+				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
+				{
+					onResponseSent(ec, bytes_transferred);
+				});
 		}
-		//-----------------------------------------------------------------------------------------------
-		// Start reading again and then handle_read --> loop until End Of Data
-		void handle_write(const boost::system::error_code& error) {
-			if (!error) {
-				socket_.async_read_some(boost::asio::buffer(data_, max_length),
-																boost::bind(&session::handle_read,
-																						this,
-																						boost::asio::placeholders::error,
-																						boost::asio::placeholders::bytes_transferred)
-				);
-			}
-			else {
-				delete this;
-			}
+
+		std::string processRequest(asio::streambuf& b, std::size_t bytes_transferred) {
+			// In this method we parse the request, process it
+			// and prepare the request.
+
+			//std::string s( (std::istreambuf_iterator<char>(&b)), std::istreambuf_iterator<char>() );
+			std::istream is(&b);
+    		std::string s;
+    		std::getline(is, s);
+			std::cout << "[processRequest] request: " << s << std::endl;
+
+			// Prepare and return the response message. 
+			std::string response("set fcs/rudder-cmd-norm 1\n");
+			response.append("set atmosphere/gust-east-fps 5.0\n");
+			response.append("set atmosphere/gust-north-fps 12.0\n");
+			response.append("set atmosphere/gust-down-fps 0.0\n");
+			
+			return response;
 		}
+
+		void onResponseSent(const boost::system::error_code& ec, std::size_t bytes_transferred) {
+			if (ec != 0) {
+				std::cout << "[onResponseSent] Error occured! Error code = "
+					<< ec.value()
+					<< ". Message: " << ec.message() << std::endl;
+			}
+
+			std::cout << "[onResponseSent] ..." << std::endl;
+			std::cout << "[onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
+
+			//onFinish();
+
+			asio::async_read_until(socket_,
+				sbuff_,
+				'\n',
+				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
+				{
+					onRequestReceived(ec, bytes_transferred);
+				});
+
+		}
+
 		//-----------------------------------------------------------------------------------------------
-		tcp::socket socket_;
-		enum { max_length = 100 };
-		char data_[max_length];
+		asio::ip::tcp::socket socket_;
+		asio::streambuf sbuff_;
+		std::string response_;
+		//asio::streambuf::mutable_buffers_type mblebuff_ = sbuff_.prepare(4096);
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
 		autoPtr< interpolation< vector > > interpU_;
 };
 
-//-----------------------------------------------------------------------------------------------
-
-//========================
-// CLASS: SERVER
-//========================
-
-class server {
-
+class Server
+{
 	public:
-		//-----------------------------------------------------------------------------------------------
-		server(boost::asio::io_service& io_service,
-			 		 short port,
-					 const Foam::fvMesh *mesh_ptr,
-				 	 const volVectorField *U_ptr)
-			: io_service_(io_service),
-				acceptor_(io_service, tcp::endpoint(tcp::v4(), port)),
+		Server(
+			boost::asio::io_service& io_service,
+			short port, const Foam::fvMesh *mesh_ptr, const volVectorField *U_ptr
+			) : io_service_(io_service),
+				acceptor_(io_service, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)),
 				mesh_ptr_(mesh_ptr),
 				U_ptr_(U_ptr)
-			{
-				start_accept();
-			}
-
-
-	private:
+		{
+			start_accept();
+		}			
 		//-----------------------------------------------------------------------------------------------
 		void start_accept()	{
-			session* new_session = new session(io_service_, mesh_ptr_, U_ptr_);
-			acceptor_.async_accept(new_session->socket(),
-													   boost::bind(&server::handle_accept,
-																			   this,
-																			   new_session,
-																			   boost::asio::placeholders::error)
-			);
+			Session* new_session = new Session(io_service_, mesh_ptr_, U_ptr_);
+			acceptor_.async_accept(
+				new_session->socket(),
+				boost::bind(
+					&Server::handle_accept,
+					this,
+					new_session,
+					boost::asio::placeholders::error)
+				);
 		}
 		//-----------------------------------------------------------------------------------------------
-		void handle_accept(session* new_session,
-											 const    boost::system::error_code& error) {
-
-			if (!error)	new_session->start();
-			else 				delete new_session;
+		void handle_accept(Session* new_session, const boost::system::error_code& error) {
+			if (!error)
+				new_session->start();
+			else
+				delete new_session;
 
 			start_accept();
 		}
 		//-----------------------------------------------------------------------------------------------
 		boost::asio::io_service& io_service_;
-		tcp::acceptor acceptor_;
+		asio::ip::tcp::acceptor acceptor_;
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
 };
 
-//-----------------------------------------------------------------------------------------------
+//===============================================
+// Server launcher
 
-//========================
-// MAIN
-//========================
+int main(int argc, char* argv[])
+{
+	//=============================================
+	// command line options
 
-int main(int argc, char* argv[]) {
+	std::string app_name = boost::filesystem::basename(argv[0]);
+	std::string raw_ip_address;
+	unsigned short port_num;
+
+	std::stringstream ss_help_header;
+	ss_help_header << "Command line options. \n" <<
+		"Calling the applications is done with the command:\n" <<
+	    "\t> $FOAM_USER_APPBIN/" << app_name << " [options]\n" <<
+		"Options";
+
+	program_options::options_description desc(ss_help_header.str());
+    desc.add_options()
+      ("help,h", "This help text.")
+      ("port,p", po::value<unsigned short>(&port_num)->default_value(1025), "Port number");
+
+	po::variables_map vm;
+
+	try {
+		po::store(parse_command_line(argc, argv, desc), vm);
+		po::notify(vm);
+
+		if (vm.count("help")) {
+			std::cout << desc << '\n';
+			return 0;
+		}
+		if (vm.count("port"))
+			std::cout << "Port number set to: " << vm["port"].as<unsigned short>() << '\n';
+	}
+	catch(boost::program_options::error& e)
+	{ 
+		std::cerr << "COMMAND LINE ERROR: " << e.what() << std::endl << std::endl; 
+	} 
+
+	//=============================================
+	// main program logic
 
 	try {
 
-		/* Print argument list
-		Foam::Info << "argc = " << argc << Foam::endl;
-		for(int i=0; i< argc; i++){
-			Foam::Info << argv[i] << ", ";
-		}
-		Foam::Info << Foam::endl;
-		*/
-
-//-----------------------------------------------------------------------------------------------
-// OPTIONAL ARGUMENTS PROCESSING
-//-----------------------------------------------------------------------------------------------
-
-		// Assign port based on argument 1 (whether or not it's present)
-		if(argc == 2){
-				my_port = argv[1];
-
-				// Remove argument 1 and pass all other arguments to OF
-				for(int i=1; i <= argc-1; i++){
-					argv[i] = argv[i+1];
-				}
-				argc--;
-		}
-
-
-		// #include "createMesh.H"
+		//=============================================
+		// Reading OpenFOAM mesh
 
 		// setRootCase.H
-    Foam::argList args(argc, argv);
-    if (!args.checkRootCase()) {
-        Foam::FatalError.exit();
-    }
+    	Foam::argList args(argc, argv, false, false); // checkArgs = true, bool checkOpts = true, 
 
-//-----------------------------------------------------------------------------------------------
-// LOADING FIELDS AND INITIALIZATION
-//-----------------------------------------------------------------------------------------------
-
-		Foam::Info << "Creating server on port " << my_port << Foam::endl;
+		if (!args.checkRootCase()) {
+			Foam::FatalError.exit();
+		}
 
 		// createTime.H
-    Foam::Info << "Create time\n" << Foam::endl;
+		std::cout << "Create time\n" << std::endl;
 		//read information from system/controlDict: mind for "startFrom latestTime;" entry
-    Foam::Time runTime(Foam::Time::controlDictName, args);
+		Foam::Time runTime(Foam::Time::controlDictName, args);
 
 		// createMesh.H
-    Foam::Info << "\nCreate mesh for time = "
-          		 << runTime.timeName() << Foam::nl << Foam::endl;
+		std::cout << "\nCreate mesh for time = " << runTime.timeName() << std::endl;
 
-    Foam::fvMesh mesh(Foam::IOobject(Foam::fvMesh::defaultRegion,
-												             runTime.timeName(),
-												             runTime,
-												             Foam::IOobject::MUST_READ
-        									 					)
-    );
+		Foam::fvMesh mesh(
+			Foam::IOobject(
+				Foam::fvMesh::defaultRegion,
+				runTime.timeName(),
+				runTime,
+				Foam::IOobject::MUST_READ)
+			);
 
 		// load field U:
-		Info << "Reading field U\n" << endl;
-		volVectorField U(IOobject("U",
-															runTime.timeName(),
-															mesh,
-															IOobject::MUST_READ,
-															IOobject::AUTO_WRITE
-														),
-										 mesh
-		);
+		std::cout << "Reading field U\n" << std::endl;
+		volVectorField U(
+			IOobject(
+				"U",
+				runTime.timeName(),
+				mesh,
+				IOobject::MUST_READ,
+				IOobject::AUTO_WRITE),
+			mesh);
 
 		// create pointers
 		const Foam::fvMesh *mesh_ptr = &mesh;
 		const volVectorField *U_ptr = &U;
 
-		// init server: wait for clients
-		Info << "Server is ready: listening on port " << my_port << endl;
-		boost::asio::io_service io_service;
-		server s(io_service, atoi(my_port), mesh_ptr, U_ptr);
-		io_service.run();
+		//=============================================
+		// Server logic
 
+		std::cout << "TCP asynchronous server listening on port "
+			<< port_num << std::endl;
+		
+		boost::asio::io_service io_service;
+		Server s(io_service, port_num, mesh_ptr, U_ptr);
+		io_service.run();
+	}
+	catch (system::system_error &e) {
+		std::cout << "Error occured! Error code = "
+			<< e.code() << ". Message: "
+			<< e.what() << std::endl;
 	}
 	catch (std::exception& e) {
 		std::cerr << "Exception: " << e.what() << "\n";

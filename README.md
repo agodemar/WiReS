@@ -1,5 +1,7 @@
 # WiReS - Wind Reconstructor Server
 
+[Agodemar: UPDATE ME!]
+
 
 Flight Simulation in presence of wind and turbulence. A "Wind Reconstruction Server" to interface JSBSim and OpenFOAM
 

@@ -1,9 +1,6 @@
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <thread>
-#include <atomic>
-#include <memory>
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -13,6 +10,7 @@
 using namespace boost;
 namespace po = boost::program_options;
 
+/*
 // Includes for OpenFOAM
 #include "argList.H"
 #include "Time.H"
@@ -25,6 +23,7 @@ namespace po = boost::program_options;
 
 using namespace Foam;
 using namespace GeographicLib;
+*/
 
 //===============================================
 // GLOBALS
@@ -36,11 +35,8 @@ using namespace GeographicLib;
 class Session
 {
 	public:
-		Session(
-			boost::asio::io_service& io_service,
-			const Foam::fvMesh *mesh_ptr,
-			const volVectorField *U_ptr)
-			: socket_(io_service), mesh_ptr_(mesh_ptr),	U_ptr_(U_ptr)
+		Session(boost::asio::io_service& io_service	/*, const Foam::fvMesh *mesh_ptr, const volVectorField *U_ptr */ )
+			: socket_(io_service) // , mesh_ptr_(mesh_ptr), U_ptr_(U_ptr)
 		{
 		}
 
@@ -51,36 +47,10 @@ class Session
 		// Read headers from client and then handle_read
 		void start()
 		{
+/*
 			// init interpolator (must be one per session):
 			interpU_ = interpolation< vector >::New("cellPoint",*U_ptr_);
-
-/*
-			socket_.async_read_some(
-				asio::buffer(mblebuff_),
-				boost::bind(
-					&Session::handle_read,
-					this,
-					boost::asio::placeholders::error,
-					boost::asio::placeholders::bytes_transferred)
-				);
-
-			sbuff_.commit(boost::asio::placeholders::bytes_transferred);
-
-			// Read from the input sequence and consume the read data.
-			// The input sequence is empty
-			std::istream input(&sbuff_);
-			std::string message;
-			// read a line from the streambuf object
-			// std::getline(input, message); 
-			// input >> message;
-
-			// Clear EOF bit.
-    		input.clear();
-
-			std::cout << "\n\n[START] byte_transferred: " << boost::asio::placeholders::bytes_transferred << std::endl;
-			std::cout << "\n\n[START] message: " << message << std::endl;
 */
-
 			asio::async_read_until(socket_,
 				sbuff_,
 				'\n',
@@ -99,7 +69,6 @@ class Session
 					<< ec.value()
 					<< ". Message: " << ec.message();
 
-				//onFinish();
 				return;
 			}
 
@@ -108,7 +77,10 @@ class Session
 			// Process the request.
 			response_ = processRequest(sbuff_, bytes_transferred);
 
-			std::cout << "[onRequestReceived] response: " << response_ << std::endl;
+			std::cout << "[onRequestReceived] response---------------------------------" << std::endl
+				<< response_ 
+				<<       "-----------------------------------------------------response"
+				<< std::endl;
 
 			// Initiate asynchronous write operation.
 			asio::async_write(socket_,
@@ -123,14 +95,17 @@ class Session
 			// In this method we parse the request, process it
 			// and prepare the request.
 
-			//std::string s( (std::istreambuf_iterator<char>(&b)), std::istreambuf_iterator<char>() );
 			std::istream is(&b);
     		std::string s;
     		std::getline(is, s);
 			std::cout << "[processRequest] request: " << s << std::endl;
 
 			// Prepare and return the response message. 
-			std::string response = "Response...\n";
+			std::string response("set fcs/rudder-cmd-norm 1\n");
+			response.append("set atmosphere/gust-east-fps 5.0\n");
+			response.append("set atmosphere/gust-north-fps 12.0\n");
+			response.append("set atmosphere/gust-down-fps 0.0\n");
+			
 			return response;
 		}
 
@@ -143,8 +118,6 @@ class Session
 
 			std::cout << "[onResponseSent] ..." << std::endl;
 			std::cout << "[onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
-
-			//onFinish();
 
 			asio::async_read_until(socket_,
 				sbuff_,
@@ -160,28 +133,24 @@ class Session
 		asio::ip::tcp::socket socket_;
 		asio::streambuf sbuff_;
 		std::string response_;
-		//asio::streambuf::mutable_buffers_type mblebuff_ = sbuff_.prepare(4096);
+/*
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
 		autoPtr< interpolation< vector > > interpU_;
+*/
 };
 
 class Server
 {
 	public:
-		Server(
-			boost::asio::io_service& io_service,
-			short port, const Foam::fvMesh *mesh_ptr, const volVectorField *U_ptr
-			) : io_service_(io_service),
-				acceptor_(io_service, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)),
-				mesh_ptr_(mesh_ptr),
-				U_ptr_(U_ptr)
+		Server(boost::asio::io_service& io_service, short port /*, const Foam::fvMesh *mesh_ptr, const volVectorField *U_ptr */)
+		: io_service_(io_service), acceptor_(io_service, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)) // , mesh_ptr_(mesh_ptr), U_ptr_(U_ptr)
 		{
 			start_accept();
 		}			
 		//-----------------------------------------------------------------------------------------------
 		void start_accept()	{
-			Session* new_session = new Session(io_service_, mesh_ptr_, U_ptr_);
+			Session* new_session = new Session(io_service_ /*, mesh_ptr_, U_ptr_ */ );
 			acceptor_.async_accept(
 				new_session->socket(),
 				boost::bind(
@@ -203,8 +172,10 @@ class Server
 		//-----------------------------------------------------------------------------------------------
 		boost::asio::io_service& io_service_;
 		asio::ip::tcp::acceptor acceptor_;
+/*
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
+*/
 };
 
 //===============================================
@@ -253,6 +224,7 @@ int main(int argc, char* argv[])
 
 	try {
 
+/*
 		//=============================================
 		// Reading OpenFOAM mesh
 
@@ -293,7 +265,7 @@ int main(int argc, char* argv[])
 		// create pointers
 		const Foam::fvMesh *mesh_ptr = &mesh;
 		const volVectorField *U_ptr = &U;
-
+*/
 		//=============================================
 		// Server logic
 
@@ -301,7 +273,7 @@ int main(int argc, char* argv[])
 			<< port_num << std::endl;
 		
 		boost::asio::io_service io_service;
-		Server s(io_service, port_num, mesh_ptr, U_ptr);
+		Server s(io_service, port_num /*, mesh_ptr, U_ptr */ );
 		io_service.run();
 	}
 	catch (system::system_error &e) {
