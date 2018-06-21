@@ -1,3 +1,40 @@
+/*
+On Windows System for Linux (WSL), ubuntu, 
+
+ - Install Boos libraries
+
+ - In bash shell, build with:
+
+> g++ -std=c++11 -m64 -Dlinux64 -DWM_ARCH_OPTION=64 -DWM_DP -DWM_LABEL_SIZE=32 \
+    -O3  -DNoRepository -ftemplate-depth-100 \
+	-fPIC -g -Wno-unused-local-typedefs \
+	-c MiniWRServer.C 
+	-o Make/linux64GccDPInt32Opt/MiniWRServer.o
+> g++ -std=c++11 -m64 -Dlinux64 -DWM_ARCH_OPTION=64 -DWM_DP -DWM_LABEL_SIZE=32 \
+    -O3  -DNoRepository -ftemplate-depth-100 \
+	-fPIC -g -Wno-unused-local-typedefs -Xlinker --add-needed -Xlinker --no-as-needed \
+	Make/linux64GccDPInt32Opt/MiniWRServer.o 
+	-lboost_system -lboost_program_options -lboost_filesystem -ldl \
+	-lm -o ./MiniWRServer
+
+- In bash shell, run as follows:
+
+> ./MiniWRServer -p 1138
+
+- In a different bash shell, run JSBSim as follows
+
+/path-to-JSBSim-root> JSBSim --script=scripts/C1723.xml --logdirectivefile=socket_oi.xml
+
+Where:
+
+<!-- /path-to-JSBSim-root/socket_oi.xml -->
+<output name="localhost" type="SOCKET" port="1138" rate="20" action="WAIT_SOCKET_REPLY" >
+  <property> position/lat-gc-deg </property>
+  <property> position/long-gc-deg </property>
+  <property> position/h-agl-meters </property>
+</output>
+
+*/
 #include <iostream>
 #include <sstream>
 #include <string>
