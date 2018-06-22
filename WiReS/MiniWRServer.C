@@ -1,21 +1,21 @@
 /*
 On Windows System for Linux (WSL), ubuntu, 
 
- - Install Boos libraries
+ - Install Boost libraries
 
  - In bash shell, build with:
 
 > g++ -std=c++11 -m64 -Dlinux64 -DWM_ARCH_OPTION=64 -DWM_DP -DWM_LABEL_SIZE=32 \
     -O3  -DNoRepository -ftemplate-depth-100 \
 	-fPIC -g -Wno-unused-local-typedefs \
-	-c MiniWRServer.C 
-	-o Make/linux64GccDPInt32Opt/MiniWRServer.o
+	-c MiniWRServer.C -o MiniWRServer.o
+
 > g++ -std=c++11 -m64 -Dlinux64 -DWM_ARCH_OPTION=64 -DWM_DP -DWM_LABEL_SIZE=32 \
     -O3  -DNoRepository -ftemplate-depth-100 \
 	-fPIC -g -Wno-unused-local-typedefs -Xlinker --add-needed -Xlinker --no-as-needed \
-	Make/linux64GccDPInt32Opt/MiniWRServer.o 
-	-lboost_system -lboost_program_options -lboost_filesystem -ldl \
-	-lm -o ./MiniWRServer
+	MiniWRServer.o \
+	-lboost_system -lboost_program_options -lboost_filesystem -ldl -lm \
+	-o ./MiniWRServer
 
 - In bash shell, run as follows:
 
@@ -43,6 +43,7 @@ Where:
 #include <boost/bind.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/make_shared.hpp>
 
 using namespace boost;
 namespace po = boost::program_options;
@@ -73,7 +74,7 @@ class Session
 {
 	public:
 		Session(boost::asio::io_service& io_service	/*, const Foam::fvMesh *mesh_ptr, const volVectorField *U_ptr */ )
-			: socket_(io_service) // , mesh_ptr_(mesh_ptr), U_ptr_(U_ptr)
+			: socket_(io_service), out_socket_(io_service) // , mesh_ptr_(mesh_ptr), U_ptr_(U_ptr)
 		{
 		}
 
@@ -88,6 +89,43 @@ class Session
 			// init interpolator (must be one per session):
 			interpU_ = interpolation< vector >::New("cellPoint",*U_ptr_);
 */
+			//===============================================================
+			// local socket, for outbound data to JSBSim
+
+			// get the address of the client
+			client_address_ = socket_.remote_endpoint().address().to_string();
+			std::cout << "[Session::start] client address: " << client_address_ << std::endl;
+			// Construct endpoint
+			out_endpoint_ = boost::make_shared<boost::asio::ip::tcp::endpoint>(
+				socket_.remote_endpoint().address(), 
+				1139 // <=============================
+				);
+
+			std::cout << "[Session::start] End point for outbound data declared at "
+				<< out_endpoint_->address() << " on port " << out_endpoint_->port() << std::endl;
+
+			// open the local socket
+			boost::system::error_code ec;
+			out_socket_.open(out_endpoint_->protocol(), ec);
+			if (ec.value() != 0) {
+				// Failed to open the socket.
+				std::cout << "Failed to open the socket! Error code = " << ec.value() 
+					<< ". Message: " << ec.message() << std::endl;
+			}
+			std::cout << "Socket for outbound data opened." << std::endl;
+
+			// connect
+			try {
+				out_socket_.connect(*out_endpoint_);
+			}
+			catch (system::system_error &e) {
+				std::cout << "Error occured connecting to output socket! Error code = " << e.code()
+					<< ". Message: " << e.what() << std::endl;
+			}
+			std::cout << "Socket for outbound data connected." << std::endl;
+
+			//===============================================================
+
 			asio::async_read_until(socket_,
 				sbuff_,
 				'\n',
@@ -102,7 +140,7 @@ class Session
 		//-----------------------------------------------------------------------------------------------
 		void onRequestReceived(const boost::system::error_code& ec, std::size_t bytes_transferred) {
 			if (ec != 0) {
-				std::cout << "[Session::start] Error occured! Error code = "
+				std::cout << "[Session::onRequestReceived] Error occured! Error code = "
 					<< ec.value()
 					<< ". Message: " << ec.message();
 
@@ -114,13 +152,13 @@ class Session
 			// Process the request.
 			response_ = processRequest(sbuff_, bytes_transferred);
 
-			std::cout << "[onRequestReceived] response---------------------------------" << std::endl
+			std::cout << "[Session::onRequestReceived] response---------------------------------" << std::endl
 				<< response_ 
 				<<       "-----------------------------------------------------response"
 				<< std::endl;
 
 			// Initiate asynchronous write operation.
-			asio::async_write(socket_,
+			asio::async_write(out_socket_, // <==========================================================
 				asio::buffer(response_),
 				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
 				{
@@ -135,7 +173,7 @@ class Session
 			std::istream is(&b);
     		std::string s;
     		std::getline(is, s);
-			std::cout << "[processRequest] request: " << s << std::endl;
+			std::cout << "[Session::processRequest] request: " << s << std::endl;
 
 			// Prepare and return the response message. 
 			std::string response("set fcs/rudder-cmd-norm 1\n");
@@ -148,13 +186,13 @@ class Session
 
 		void onResponseSent(const boost::system::error_code& ec, std::size_t bytes_transferred) {
 			if (ec != 0) {
-				std::cout << "[onResponseSent] Error occured! Error code = "
+				std::cout << "[Session::onResponseSent] Error occured! Error code = "
 					<< ec.value()
 					<< ". Message: " << ec.message() << std::endl;
 			}
 
-			std::cout << "[onResponseSent] ..." << std::endl;
-			std::cout << "[onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
+			std::cout << "[Session::onResponseSent] ..." << std::endl;
+			std::cout << "[Session::onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
 
 			asio::async_read_until(socket_,
 				sbuff_,
@@ -170,6 +208,9 @@ class Session
 		asio::ip::tcp::socket socket_;
 		asio::streambuf sbuff_;
 		std::string response_;
+		std::string client_address_;
+		boost::shared_ptr<boost::asio::ip::tcp::endpoint> out_endpoint_;
+		asio::ip::tcp::socket out_socket_;
 /*
 		const Foam::fvMesh *mesh_ptr_;
 		const volVectorField *U_ptr_;
@@ -224,7 +265,6 @@ int main(int argc, char* argv[])
 	// command line options
 
 	std::string app_name = boost::filesystem::basename(argv[0]);
-	std::string raw_ip_address;
 	unsigned short port_num;
 
 	std::stringstream ss_help_header;
@@ -248,8 +288,9 @@ int main(int argc, char* argv[])
 			std::cout << desc << '\n';
 			return 0;
 		}
-		if (vm.count("port"))
+		if (vm.count("port")) {
 			std::cout << "Port number set to: " << vm["port"].as<unsigned short>() << '\n';
+		}
 	}
 	catch(boost::program_options::error& e)
 	{ 
