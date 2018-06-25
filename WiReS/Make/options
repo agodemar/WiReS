@@ -1,5 +1,5 @@
 c++WARN  += -Wall -Wno-unused-parameter -Wno-overloaded-virtual -Wno-missing-field-initializers -Wno-missing-braces
-c++FLAGS += -g -Wno-unused-local-typedefs
+c++FLAGS += -g -Wno-unused-local-typedefs -ftemplate-depth=200
 
 EXE_INC = \
     -I$(LIB_SRC)/triSurface/lnInclude \
