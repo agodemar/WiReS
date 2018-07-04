@@ -169,13 +169,12 @@ class Session
 				<<       "-----------------------------------------------------response"
 				<< std::endl;
 
-			// Initiate asynchronous write operation.
-			asio::async_write(out_socket_, // <==========================================================
+			// Initiate synchronous write operation.
+			boost::system::error_code ignored_error;
+			asio::write(out_socket_, // <==========================================================
 				asio::buffer(response_),
-				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
-				{
-					onResponseSent(ec, bytes_transferred);
-				});
+				asio::transfer_all(), 
+				ignored_error);
 		}
 
 		std::string processRequest(asio::streambuf& b, std::size_t bytes_transferred) {
