@@ -130,6 +130,9 @@ class Session
 			try {
 				out_socket_.connect(*out_endpoint_);
 				std::cout << "[Session::start] Socket for outbound data connected." << std::endl;
+				// Initiate synchronous write operation.
+				asio::write(out_socket_, asio::buffer("Block_Socket 0\n"));
+				std::cout << "[Session::start] Block_Socket message sent." << std::endl;
 			}
 			catch (system::system_error &e) {
 				std::cout << "[Session::start] Error occurred connecting to output socket! Error code = " << e.code()
@@ -139,6 +142,18 @@ class Session
 
 			//===============================================================
 
+			// Read the first message from JSBSim, containing only labels
+			const std::string delimiter = "\n";
+			boost::system::error_code error;
+			asio::read_until(socket_, sbuff_, delimiter, error);
+			std::istream str(&sbuff_); 
+			std::string inbound_msg;
+			std::getline(str, inbound_msg);
+			std::cout << "[Session::start] Read:---" << std::endl
+				<< inbound_msg << std::endl 
+				<< "---" << std::endl;
+
+			// Start reading data
 			asio::async_read_until(socket_,
 				sbuff_,
 				'\n',
@@ -155,7 +170,6 @@ class Session
 				std::cout << "[Session::onRequestReceived] Error occurred! Error code = "
 					<< ec.value()
 					<< ". Message: " << ec.message();
-
 				return;
 			}
 
@@ -166,16 +180,20 @@ class Session
 
 			std::cout << "[Session::onRequestReceived] response---------------------------------" << std::endl
 				<< response_ 
-				<<       "--------------------------------------------------------------response"
-				<< std::endl;
+				<<       "--------------------------------------------------------------response" << std::endl;
 
-			// Initiate synchronous write operation.
+			// make JSBSim input blocking before sending new data
+			asio::write(out_socket_, asio::buffer("Block_Socket 1\n"));
+			std::cout << "[Session::onRequestReceived] Block_Socket message sent." << std::endl;
+
+			// Send data
 			asio::async_write(out_socket_, // <==========================================================
 				asio::buffer(response_),
 				[this](const boost::system::error_code& ec, std::size_t bytes_transferred)
 				{
 					onResponseSent(ec, bytes_transferred);
 				});
+			std::cout << "[Session::onRequestReceived] Data sent." << std::endl;
 		}
 
 		std::string processRequest(asio::streambuf& b, std::size_t bytes_transferred) {
@@ -282,7 +300,7 @@ class Session
 			response.append("set atmosphere/gust-east-fps 5.0\n");
 			response.append("set atmosphere/gust-north-fps 12.0\n");
 			response.append("set atmosphere/gust-down-fps 0.0\n");
-			response.append("resume\n");
+			//response.append("Unblock_Socket\n");
 			
 			return response;
 		}
@@ -297,10 +315,6 @@ class Session
 			std::cout << "[Session::onResponseSent] ..." << std::endl;
 			std::cout << "[Session::onResponseSent] bytes_transferred (outbound): " << bytes_transferred << std::endl;
 
-			// Ask JSBSim to iterate, synchronously
-			// asio::write(out_socket_, asio::buffer("iterate 0"));
-
-			/// * JSBSim input socket is blocking
 			asio::async_read_until(socket_,
 				sbuff_,
 				'\n',
@@ -308,7 +322,7 @@ class Session
 				{
 					onRequestReceived(ec, bytes_transferred);
 				});
-			/// */
+			std::cout << "[Session::onResponseSent] now reading ..." << std::endl;
 		}
 
 		//-----------------------------------------------------------------------------------------------
