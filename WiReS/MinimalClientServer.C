@@ -57,16 +57,34 @@ namespace po = boost::program_options;
 void writeToSocket(asio::ip::tcp::socket &sock, std::string buf)
 {
 	std::size_t total_bytes_written = 0;
-	// Step 3. Run the loop until all data is written
-	// to the socket.
+	// Run writing loop until all data is written to the socket.
 	while (total_bytes_written != buf.length())
 	{
 		std::cout << "Sending bytes to output socket on host " << sock.remote_endpoint().address().to_string() << ", port " << sock.remote_endpoint().port() << std::endl;
-		std::cout << "Total bytes written " << total_bytes_written << std::endl;
 		total_bytes_written += sock.write_some(
 			asio::buffer(buf.c_str() + total_bytes_written,
 						 buf.length() - total_bytes_written));
 	}
+	std::cout << "Total bytes written " << total_bytes_written << std::endl;
+}
+
+std::string readLineFromSocket(asio::ip::tcp::socket &sock)
+{
+	// object used to collect inbound data
+	asio::streambuf sbuff;
+	// read inbound data
+	std::size_t total_bytes_read = 0;
+	total_bytes_read += asio::read_until(sock, sbuff, '\n');
+	// extract a line from buffer
+	std::istream str(&sbuff); 
+	std::string inbound_msg;
+	std::getline(str, inbound_msg);
+	std::cout << "[Session::start] Read:---" << std::endl
+			  << inbound_msg << std::endl 
+			  << "---" << std::endl;
+	std::cout << "Total bytes read: " << total_bytes_read << std::endl;
+	std::cout << "Line length: " << inbound_msg.size() << std::endl;
+	return inbound_msg;
 }
 
 //===============================================
@@ -122,18 +140,34 @@ int main(int argc, char *argv[])
 	std::string raw_ip_address = "127.0.0.1";
 	try
 	{
-		asio::ip::tcp::endpoint
-			ep(asio::ip::address::from_string(raw_ip_address), output_port_num);
+		
 		asio::io_service ios;
 
-		// Step 1. Allocating and opening the socket.
-		asio::ip::tcp::socket sock(ios, ep.protocol());
-		sock.connect(ep);
+		/*
+		// Endpoint inbound connection
+		asio::ip::tcp::endpoint
+			ep_inbound(asio::ip::address::from_string(raw_ip_address), input_port_num);
+		// Allocating and opening the socket
+		asio::ip::tcp::socket sock_inbound(ios, ep_inbound.protocol());
+		sock_inbound.connect(ep_inbound);
+		std::cout << "Socket for inbound data connected" << std::endl;
+		// Reading inbound data
+		std::string message_inbound = readLineFromSocket(sock_inbound);
+		*/
 
-		// Step 2. Allocating and filling the buffer.
-		std::string buf = "abcdefghi";
+		// Endpoint outbound connection
+		asio::ip::tcp::endpoint
+			ep_outbound(asio::ip::address::from_string(raw_ip_address), output_port_num);
+		// Allocating and opening the socket
+		asio::ip::tcp::socket sock_outbound(ios, ep_outbound.protocol());
+		sock_outbound.connect(ep_outbound);
+		std::cout << "Socket for outbound data connected" << std::endl;
 
-		writeToSocket(sock, buf);
+		// Allocating and filling the buffer for output
+		std::string message_outbound = ">>>>>> abcdefghi <<<<<<";
+
+		// Write the buffer content to outbound socket
+		writeToSocket(sock_outbound, message_outbound);
 	}
 	catch (system::system_error &e)
 	{
