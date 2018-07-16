@@ -196,7 +196,7 @@ int main(int argc, char *argv[])
 		}
 		if (vm.count("jsbsim-command"))
 		{
-			std::cout << "Sending command '" << vm["jsbsim-command"].as<std::string>() << "' to JSBSim\n";
+			std::cout << "Command: '" << vm["jsbsim-command"].as<std::string>() << "' to JSBSim\n";
 		}
 	}
 	catch (boost::program_options::error &e)
@@ -231,15 +231,14 @@ int main(int argc, char *argv[])
 		std::string response;
 		
 		// Sync connect.
-		client.connect();
 		std::cout << "Sending connect request to the server... " << std::endl;
-		response = client.sendCommand(">>> agodemar <<<\n");
-
-		std::cout << "Sending command... " << std::endl;
+		client.connect();
+		// receive JSBSim welcome
+		std::cout << "Receive response: " + client.receiveResponse() << std::endl;
+		// send command/receive response
+		std::cout << "Sending command: " + command << std::endl;
 		response = client.sendCommand(command);
-
 		std::cout << "Response received: " << response << std::endl;
-
 		// Close the connection and free resources.
 		client.close();
 	}
