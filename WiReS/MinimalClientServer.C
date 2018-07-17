@@ -42,12 +42,28 @@ Where:
 
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 
 using namespace boost;
 namespace po = boost::program_options;
+
+namespace wires
+{
+	bool get_double_response(std::string input, double& val)
+	{
+		std::vector<std::string> results;
+		boost::algorithm::split(results, input, is_any_of("="));
+		if (results.size() > 0) {
+			val = atof(results[results.size() - 1].c_str());
+			return true;
+		}
+		else
+			return false;
+	}
+}
 
 //===============================================
 // GLOBALS
@@ -125,7 +141,10 @@ class SyncTCPClient
 
 	void sendRequest(const std::string &request)
 	{
-		asio::write(m_sock, asio::buffer(request));
+		//asio::write(m_sock, asio::buffer(request));
+		std::ostringstream oss;
+		oss << request << std::flush;
+		asio::write(m_sock, asio::buffer(oss.str()));
 	}
 
 	std::string receiveResponse()
@@ -239,6 +258,18 @@ int main(int argc, char *argv[])
 		std::cout << "Sending command: " + command << std::endl;
 		response = client.sendCommand(command);
 		std::cout << "Response received: " << response << std::endl;
+		double h_agl_ft;
+		if (wires::get_double_response(response, h_agl_ft))
+		{
+			std::cout << "Double value: " << h_agl_ft << std::endl;
+			std::string command2 = "set position/h-agl-ft " + std::to_string(h_agl_ft + 1000.0);
+			std::string response2;
+			response2 = client.sendCommand(command2);
+			std::cout << "Response received: " << response2 << std::endl;
+		}
+		else
+			std::cout << "Unable to parse double value" << std::endl;
+
 		// Close the connection and free resources.
 		client.close();
 	}
