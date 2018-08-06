@@ -135,7 +135,7 @@ class SyncTCPClient
 
 	std::string sendCommand(std::string command)
 	{
-		sendRequest(command + "\n");
+		sendRequest(command + "\r\n");
 		return receiveResponse();
 	};
 
@@ -150,8 +150,11 @@ class SyncTCPClient
 	std::string receiveResponse()
 	{
 		asio::streambuf buf;
+		
+		std::cout << "[receiveResponse . read_until newline ..." << std::endl;
 		asio::read_until(m_sock, buf, '\n');
-
+		std::cout << "[receiveResponse . read_until newline done." << std::endl;
+		
 		std::istream input(&buf);
 
 		std::string response;
